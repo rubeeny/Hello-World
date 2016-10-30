@@ -212,7 +212,7 @@ void ReduceVocab() {
     b++;
   } else free(vocab[a].word);
   vocab_size = b;
-  for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;
+  for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;//重新建立hash索引
   for (a = 0; a < vocab_size; a++) {
     // Hash will be re-computed, as it is not actual
     hash = GetWordHash(vocab[a].word);
@@ -299,7 +299,7 @@ void LearnVocabFromTrainFile() {
   FILE *fin;
   long long a, i;
   for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;	// 初始化hash表
-  fin = fopen(train_file, "rb");
+  fin = fopen(train_file, "rb");//打开一个二进制文件，文件必须存在，只允许读
   if (fin == NULL) {
     printf("ERROR: training data file not found!\n");
     exit(1);
@@ -321,22 +321,22 @@ void LearnVocabFromTrainFile() {
     } else vocab[i].cn++;	// 词频加1
     if (vocab_size > vocab_hash_size * 0.7) ReduceVocab();	// 词典过大,则缩减低频词
   }
-  SortVocab();
+  SortVocab();//所有的词加载完毕后，进行排序，词频高的在前
   if (debug_mode > 0) {
     printf("Vocab size: %lld\n", vocab_size);
     printf("Words in train file: %lld\n", train_words);
   }
-  file_size = ftell(fin);
+  file_size = ftell(fin);//获得文件大小
   fclose(fin);
 }
-
+//输出单词和词频到文件
 void SaveVocab() {
   long long i;
   FILE *fo = fopen(save_vocab_file, "wb");
   for (i = 0; i < vocab_size; i++) fprintf(fo, "%s %lld\n", vocab[i].word, vocab[i].cn);
   fclose(fo);
 }
-
+//把read_vocab_file中的数据，读入到vocab中
 void ReadVocab() {
   long long a, i = 0;
   char c;
