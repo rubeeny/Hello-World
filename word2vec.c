@@ -373,7 +373,7 @@ void ReadVocab() {
 void InitNet() {
   long long a, b;
   unsigned long long next_random = 1;
-  // 申请词向量空间
+  // 申请词向量空间----posix_memalign()成功时会返回size字节的动态内存 syn0，并且这块内存的地址是128的整数倍
   a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * layer1_size * sizeof(real));
   if (syn0 == NULL) {printf("Memory allocation failed\n"); exit(1);}
   if (hs) {	// 使用层次softmax,申请binary tree的参数空间
@@ -396,7 +396,7 @@ void InitNet() {
   CreateBinaryTree();
 }
 
-// 训练线程
+// 训练线程----//这个线程函数执行之前，已经做好了一些工作：根据词频排序的词汇表，每个单词的huffman编码  
 void *TrainModelThread(void *id) {
   // word 向sen中添加单词用，句子完成后表示句子中的当前单词
   // last_word 上一个单词，辅助扫描窗口
@@ -437,7 +437,7 @@ void *TrainModelThread(void *id) {
       alpha = starting_alpha * (1 - word_count_actual / (real)(iter * train_words + 1));	// 调整学习率
       if (alpha < starting_alpha * 0.0001) alpha = starting_alpha * 0.0001;	// 学习率过小则固定一个值
     }
-    if (sentence_length == 0) {	// 重新读取一个句子
+    if (sentence_length == 0) {	// 重新读取一个句子-----如果当前句子长度为0
       while (1) {	// 读取一个句子
         word = ReadWordIndex(fi);
         if (feof(fi)) break;	// 文件末尾
@@ -451,11 +451,11 @@ void *TrainModelThread(void *id) {
           next_random = next_random * (unsigned long long)25214903917 + 11;
           if (ran < (next_random & 0xFFFF) / (real)65536) continue;	// 以一定概率舍弃该词
         }
-        sen[sentence_length] = word;	// 将该词存入句子
+        sen[sentence_length] = word;	// 将该词存入句子,存放的是该词在词典中的索引
         sentence_length++;
         if (sentence_length >= MAX_SENTENCE_LENGTH) break;	// 句子过长,舍弃后面的.
       }
-      sentence_position = 0;	// 句子指针重置
+      sentence_position = 0;	// 当前单词在当前句子中的索引
     }
     if (feof(fi) || (word_count > train_words / num_threads)) {	// 文件结束,或者该线程工作已经完成
       word_count_actual += word_count - last_word_count;	// TODO
@@ -469,10 +469,10 @@ void *TrainModelThread(void *id) {
     }
     word = sen[sentence_position];	// 取句子中的一个单词，开始训练
     if (word == -1) continue;	// TODO 怎么还会不存在
-    for (c = 0; c < layer1_size; c++) neu1[c] = 0;	// 0初始化参数
-    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
+    for (c = 0; c < layer1_size; c++) neu1[c] = 0;	// 0初始化参数 xw
+    for (c = 0; c < layer1_size; c++) neu1e[c] = 0;//e 对Xw求导更新参数
     next_random = next_random * (unsigned long long)25214903917 + 11;
-    b = next_random % window;	// b是个随机数，0到window-1，指定了本次算法操作实际的窗口大小
+    b = next_random % window;	// b是个随机数，0到window-1，指定了本次算法操作实际的窗口大小 window-b
     if (cbow) {  // 训练cbow模型,输入是平均窗口词向量,预测中心词
       // in -> hidden
       cw = 0;
@@ -482,15 +482,15 @@ void *TrainModelThread(void *id) {
         if (c < 0) continue;	// c超界则直接跳过
         if (c >= sentence_length) continue;
         last_word = sen[c];
-        if (last_word == -1) continue;
-        for (c = 0; c < layer1_size; c++) neu1[c] += syn0[c + last_word * layer1_size];	// 累加到neu1
-        cw++;
+        if (last_word == -1) continue;//没有这个单词
+        for (c = 0; c < layer1_size; c++) neu1[c] += syn0[c + last_word * layer1_size];	// 累加到neu1----Xw
+        cw++;//本次在窗口内的词数
       }
       if (cw) {	// 经过了窗口累加,即neu1不为0
         for (c = 0; c < layer1_size; c++) neu1[c] /= cw;	// 累加词向量取平均
         // hierarchy softmax 方式
         if (hs) for (d = 0; d < vocab[word].codelen; d++) {
-          f = 0;
+          f = 0;//f对应q neu1对应Xw，syn1对应0j-1w
           l2 = vocab[word].point[d] * layer1_size;	// 该节点在syn1中第一维的偏移量
           // Propagate hidden -> output
           for (c = 0; c < layer1_size; c++) f += neu1[c] * syn1[c + l2];	// 向量的积,这里输入是平均窗口词向量
