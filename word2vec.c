@@ -38,7 +38,7 @@ struct vocab_word {
 
 char train_file[MAX_STRING],	// 保存 训练文本 文件名
 	output_file[MAX_STRING];	// 保存 输出词向量文件名
-char save_vocab_file[MAX_STRING],	// 保存词典到文件
+char save_vocab_file[MAX_STRING],	// 保存词典到文件 词+词频
 	read_vocab_file[MAX_STRING];	// 读取词典文件,而不是从训练数据生成词典
 struct vocab_word *vocab;	// 词典
 int binary = 0,	// 表示输出的结果文件是否采用二进制存储，0表示不使用（即普通的文本存储，可以打开查看），1表示使用，即vectors.bin的存储类型
@@ -220,7 +220,7 @@ void ReduceVocab() {
     vocab_hash[hash] = a;
   }
   fflush(stdout);
-  min_reduce++;
+  min_reduce++;//每执行一个，最小词频阈值增加1
 }
 
 // Create binary Huffman tree using the word counts
@@ -522,7 +522,7 @@ void *TrainModelThread(void *id) {
           for (c = 0; c < layer1_size; c++) f += neu1[c] * syn1neg[c + l2];	// 向量的积
           if (f > MAX_EXP) g = (label - 1) * alpha;	// σ得出正类
           else if (f < -MAX_EXP) g = (label - 0) * alpha;	// σ得出负类
-          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;	// 查表计算σ,再求g
+          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;	// 查表计算σ, k=(x-x0)/h 再求g
           for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];	// 计算该样本的误差项(关于neu1的梯度),最后每个负样本的都会累加起来
           for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * neu1[c];		// 更新该负样本的参数,g*neu1[c]为关于syn1neg的梯度
         }
@@ -553,7 +553,7 @@ void *TrainModelThread(void *id) {
           for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1[c + l2];	// 向量的积,输入syn0[c + l1]为该窗口词的词向量
           if (f <= -MAX_EXP) continue;
           else if (f >= MAX_EXP) continue;
-          else f = expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))];	// 计算σ,查表
+          else f = expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))];// 计算σ,查表 k=(x-x0)/h
           // 'g' is the gradient multiplied by the learning rate
           // g是梯度与学习率的乘积,辅助量
           g = (1 - vocab[word].code[d] - f) * alpha;
@@ -779,8 +779,9 @@ int main(int argc, char **argv) {
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
   for (i = 0; i < EXP_TABLE_SIZE; i++) {	// 生成sigmoid查找表
-    expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
-    expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
+     //求e在[-6,6]的每一个值，xk=x0+i*h h步长为2*MAX_EXP x0=-MAX_EXP exp(xk)
+    expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table 
+    expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1) 求sigmod函数值，其中x=exp(x)
   }
 //  test();
   TrainModel();
