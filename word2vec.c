@@ -779,7 +779,7 @@ int main(int argc, char **argv) {
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
   for (i = 0; i < EXP_TABLE_SIZE; i++) {	// 生成sigmoid查找表
-     //求e在[-6,6]的每一个值，xk=x0+i*h h步长为2*MAX_EXP x0=-MAX_EXP exp(xk)
+     //求e在[-6,6]的每一个值，xk=x0+i*h h步长为2*MAX_EXP/EXP_TABLE_SIZE  x0=-MAX_EXP  exp(xk)
     expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table 
     expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1) 求sigmod函数值，其中x=exp(x)
   }
